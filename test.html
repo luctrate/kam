@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Flowise Teams Settings</title>
+
+  <!-- Teams JS SDK -->
+  <script src="https://res.cdn.office.net/teams-js/2.0.0/js/MicrosoftTeams.min.js"></script>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 16px;
+      background: #f5f5f5;
+    }
+    .container {
+      max-width: 640px;
+      margin: 24px auto;
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 20px 24px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 8px;
+    }
+    p {
+      margin: 0 0 16px;
+      color: #444;
+      font-size: 14px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    input[type="text"],
+    input[type="url"],
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+      margin-bottom: 12px;
+    }
+    button {
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      background: #6264a7; /* Teams-ish purple */
+      color: #ffffff;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    .status {
+      margin-top: 12px;
+      font-size: 13px;
+    }
+    .status.ok {
+      color: #107c10;
+    }
+    .status.error {
+      color: #d13438;
+    }
+    .small {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Flowise Teams Settings</h1>
+    <p>
+      Configure how this Teams app connects to your Flowise instance.
+      These settings are stored per user in this demo. Replace with backend calls for real usage.
+    </p>
+
+    <form id="settings-form">
+      <label for="flowiseUrl">Flowise API URL</label>
+      <input
+        type="url"
+        id="flowiseUrl"
+        name="flowiseUrl"
+        placeholder="https://your-flowise-host/api"
+        required
+      />
+
+      <label for="defaultAgent">Default Agent / Flow ID</label>
+      <input
+        type="text"
+        id="defaultAgent"
+        name="defaultAgent"
+        placeholder="e.g. sales-assistant, 1234-uuid"
+      />
+
+      <label for="mode">Mode</label>
+      <select id="mode" name="mode">
+        <option value="user">User-specific settings</option>
+        <option value="admin">Org / admin mode</option>
+      </select>
+      <div class="small">
+        In a real app, you would check the user’s role via your backend / Graph and only show admin options to admins.
+      </div>
+
+      <div style="margin-top:16px;">
+        <button type="submit" id="saveBtn">Save settings</button>
+      </div>
+    </form>
+
+    <div id="status" class="status"></div>
+    <div id="contextInfo" class="small"></div>
+  </div>
+
+  <script>
+    (function () {
+      let teamsApp;
+      const form = document.getElementById("settings-form");
+      const statusEl = document.getElementById("status");
+      const contextInfoEl = document.getElementById("contextInfo");
+      const saveBtn = document.getElementById("saveBtn");
+
+      // Simple localStorage key – replace with backend persistence in production
+      const STORAGE_KEY = "flowiseTeamsSettings";
+
+      function setStatus(message, type) {
+        statusEl.textContent = message || "";
+        statusEl.className = "status" + (type ? " " + type : "");
+      }
+
+      function loadSettings() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+
+          const data = JSON.parse(raw);
+          if (data.flowiseUrl) {
+            document.getElementById("flowiseUrl").value = data.flowiseUrl;
+          }
+          if (data.defaultAgent) {
+            document.getElementById("defaultAgent").value = data.defaultAgent;
+          }
+          if (data.mode) {
+            document.getElementById("mode").value = data.mode;
+          }
+        } catch (e) {
+          console.error("Failed to load settings", e);
+        }
+      }
+
+      function saveSettingsLocally(values) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(values));
+      }
+
+      // Placeholder: call your backend instead of localStorage
+      async function saveSettingsToBackend(values, teamsContext) {
+        // Example:
+        // await fetch("https://your-api/teams/settings", {
+        //   method: "POST",
+        //   headers: {
+        //     "Content-Type": "application/json",
+        //     "Authorization": "Bearer " + teamsContext.user.userPrincipalName // or SSO token
+        //   },
+        //   body: JSON.stringify(values)
+        // });
+        return Promise.resolve(); // no-op for demo
+      }
+
+      async function initTeams() {
+        try {
+          // Initialize Teams SDK
+          teamsApp = microsoftTeams.app;
+          await teamsApp.initialize();
+
+          const context = await teamsApp.getContext();
+          contextInfoEl.textContent =
+            "Signed in as: " +
+            (context.user?.userPrincipalName || context.user?.id || "Unknown user");
+
+          // Load existing settings (from localStorage in this demo)
+          loadSettings();
+
+          setStatus("Connected to Microsoft Teams.", "ok");
+        } catch (err) {
+          console.error("Teams initialization failed", err);
+          setStatus("Unable to initialize Microsoft Teams context.", "error");
+        }
+      }
+
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        setStatus("");
+        saveBtn.disabled = true;
+
+        const values = {
+          flowiseUrl: document.getElementById("flowiseUrl").value.trim(),
+          defaultAgent: document.getElementById("defaultAgent").value.trim(),
+          mode: document.getElementById("mode").value
+        };
+
+        if (!values.flowiseUrl) {
+          setStatus("Flowise API URL is required.", "error");
+          saveBtn.disabled = false;
+          return;
+        }
+
+        try {
+          const context = teamsApp ? await teamsApp.getContext() : null;
+
+          // 1) Save locally (demo)
+          saveSettingsLocally(values);
+
+          // 2) Save to backend (real world)
+          await saveSettingsToBackend(values, context);
+
+          setStatus("Settings saved successfully.", "ok");
+        } catch (err) {
+          console.error("Failed to save settings", err);
+          setStatus("Failed to save settings. Check the console for details.", "error");
+        } finally {
+          saveBtn.disabled = false;
+        }
+      });
+
+      // Kick everything off
+      initTeams();
+    })();
+  </script>
+</body>
+</html>
